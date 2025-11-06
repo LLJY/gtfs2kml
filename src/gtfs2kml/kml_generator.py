@@ -27,6 +27,15 @@ class KMLGenerator:
     Converts Route objects with shapes and stops into KML format
     for visualization in mapping tools like Google Earth.
     """
+    PREDEFINED_COLORS = [
+        'ff8b0000', 'ff008000', 'ff0000cd', 'ff00ff00', 'ff000080', 'ff808080',
+        'ffff8c00', 'ffc71585', 'ff32cd32', 'ffff0000', 'ff0000ff', 'ff008080',
+        'ff9400d3', 'ffc0c0c0', 'ffdc143c', 'ff8a2be2', 'ff7fff00', 'ff4b0082',
+        'ffff1493', 'ff006400', 'ffffa500', 'ff228b22', 'ffb8860b', 'ff800080',
+        'ff000000', 'ffff00ff', 'ffffd700', 'ff40e0d0', 'ff00ced1', 'ff2e8b57',
+        'ffb22222', 'ffffffff', 'ff1e90ff', 'ffffff00', 'ff7cfc00', 'ffd2691e',
+        'ffff4500', 'ffff69b4', 'fff0e68c', 'ff00ffff'
+    ]
 
     def __init__(
         self,
@@ -46,11 +55,13 @@ class KMLGenerator:
         self.include_stops = include_stops
         self.altitude_mode = altitude_mode
 
+
     def generate_route_kml(
         self,
         route: Route,
         output_path: Path,
-        include_multiple_shapes: bool = True
+        include_multiple_shapes: bool = True,
+        color_index: int = 0
     ) -> None:
         """
         Generate a KML file for a single route.
@@ -72,11 +83,11 @@ class KMLGenerator:
         # Create folders for organization
         if route.has_shapes:
             shapes_folder = kml.newfolder(name="Route Paths")
-            self._add_shapes_to_folder(shapes_folder, route, include_multiple_shapes)
+            self._add_shapes_to_folder(shapes_folder, route, include_multiple_shapes, color_index)
 
         if self.include_stops and route.has_stops:
             stops_folder = kml.newfolder(name="Stops")
-            self._add_stops_to_folder(stops_folder, route)
+            self._add_stops_to_folder(stops_folder, route, color_index)
 
         # Save KML file
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -100,8 +111,7 @@ class KMLGenerator:
         kml = simplekml.Kml()
         kml.document.name = "All Routes"
 
-        for route in routes:
-            # Create a folder for each route
+        for i, route in enumerate(routes):
             route_folder = kml.newfolder(name=f"Route {route.display_name}")
 
             if route.route_desc:
@@ -110,12 +120,12 @@ class KMLGenerator:
             # Add shapes
             if route.has_shapes:
                 shapes_folder = route_folder.newfolder(name="Paths")
-                self._add_shapes_to_folder(shapes_folder, route, include_multiple_shapes=True)
+                self._add_shapes_to_folder(shapes_folder, route, include_multiple_shapes=True, color_index=i)
 
             # Add stops
             if self.include_stops and route.has_stops:
                 stops_folder = route_folder.newfolder(name="Stops")
-                self._add_stops_to_folder(stops_folder, route)
+                self._add_stops_to_folder(stops_folder, route, color_index=i)
 
         # Save KML file
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -126,7 +136,8 @@ class KMLGenerator:
         self,
         folder: simplekml.Folder,
         route: Route,
-        include_multiple_shapes: bool
+        include_multiple_shapes: bool,
+        color_index: int = 0
     ) -> None:
         """
         Add route shapes to a KML folder.
@@ -156,7 +167,7 @@ class KMLGenerator:
             linestring.coords = shape.kml_coordinates
 
             # Set style
-            linestring.style.linestyle.color = route.kml_color
+            linestring.style.linestyle.color = self.PREDEFINED_COLORS[color_index % len(self.PREDEFINED_COLORS)]
             linestring.style.linestyle.width = self.line_width
 
             # Set altitude mode
@@ -169,7 +180,8 @@ class KMLGenerator:
     def _add_stops_to_folder(
         self,
         folder: simplekml.Folder,
-        route: Route
+        route: Route,
+        color_index: int = 0
     ) -> None:
         """
         Add route stops to a KML folder.
@@ -181,7 +193,7 @@ class KMLGenerator:
         # Create a single shared style object for all stops
         # All points will reference this same style object
         shared_style = simplekml.Style()
-        shared_style.iconstyle.color = route.kml_color
+        shared_style.iconstyle.color = self.PREDEFINED_COLORS[color_index % len(self.PREDEFINED_COLORS)]
         shared_style.iconstyle.scale = 0.8
         shared_style.iconstyle.icon.href = (
             "http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png"
@@ -224,10 +236,10 @@ class KMLGenerator:
 
         if split_by_route:
             logger.info(f"Generating {len(routes)} KML files (one per route)")
-            for route in routes:
+            for i, route in enumerate(routes):
                 filename = f"{route.safe_filename}.kml"
                 output_path = output_dir / filename
-                self.generate_route_kml(route, output_path)
+                self.generate_route_kml(route, output_path, color_index=i)
                 output_files.append(output_path)
         else:
             logger.info(f"Generating single KML file with {len(routes)} routes")
